@@ -594,17 +594,27 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
  
 
     # Undiversified ES
+    count_a = pnl_s['und_isin'].unique()
+    count = pnl_s.groupby('portfolio_nb', as_index = False)['und_isin'].nunique()
     
     # ord_und_ES_pnl = pnl_s.groupby(['portfolio_nb', 'ref_dt', 'und_isin'], as_index = False).agg(pnl=('P&L', 'sum'))
     # ord_und_ES_pnl_app = ord_und_ES_pnl.groupby(['portfolio_nb', 'und_isin'], as_index = False).agg(undiv_pnl=('pnl', lambda x: x.nsmallest(ord_observations).mean()))
     # ord_und_ES = ord_und_ES_pnl_app.groupby('portfolio_nb', as_index = False)['undiv_pnl'].sum()
     ord_undiv_ES = ord_div_ES.rename(columns={'ord_div_ES': 'ord_undiv_ES'}) # @gteodori: temp hack
+    ord_undiv_ES = ord_undiv_ES.merge(count, on=['portfolio_nb'], how='left')
+    ord_undiv_ES['ord_undiv_ES'] = ord_undiv_ES['ord_undiv_ES'] * (1.0 + 0.078 * np.sqrt(ord_undiv_ES['und_isin'] - 1))
+    print(ord_undiv_ES)
+    ord_undiv_ES = ord_undiv_ES[['portfolio_nb', 'ord_undiv_ES']]
  
 
     # stress_und_ES_pnl = pnl_u.groupby(['portfolio_nb', 'ref_dt', 'und_isin'], as_index = False).agg(pnl=('P&L', 'sum'))
     # stress_und_ES_pnl_app = stress_und_ES_pnl.groupby(['portfolio_nb', 'und_isin'], as_index = False).agg(undiv_pnl=('pnl', lambda x: x.nsmallest(stress_observations).mean()))
     # stress_und_ES = stress_und_ES_pnl_app.groupby('portfolio_nb', as_index = False)['undiv_pnl'].sum()
     str_undiv_ES = str_div_ES.rename(columns={'str_div_ES': 'str_undiv_ES'}) # @gteodori: temp hack
+    str_undiv_ES = str_undiv_ES.merge(count, on=['portfolio_nb'], how='left')
+    str_undiv_ES['str_undiv_ES'] = str_undiv_ES['str_undiv_ES'] * (1.0 + 0.078 * np.sqrt(str_undiv_ES['und_isin'] - 1))
+    str_undiv_ES = str_undiv_ES[['portfolio_nb', 'str_undiv_ES']]
+ 
 
  
 
@@ -650,7 +660,7 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
     gross_pos_value = gross_pos_value.rename(columns={'pos_value': 'gross_pos_value'})
     output = output.merge(gross_pos_value, on=['portfolio_nb'], how='left')
     
-    output['margin_%'] = output['initial_margin'] / output['gross_pos_value']
+    output['margin_%'] = 100.0 * output['initial_margin'] / output['gross_pos_value']
     
     columns_order = ['portfolio_nb', 'ES', 'DECO', 'whatif', 'mtm', 'initial_margin', 'gross_pos_value', 'margin_%']
     output = output[columns_order]
@@ -684,25 +694,24 @@ rf04 = read_arrow(path + '\\2024-11-20_RF04.arrow')
 # @gteodori: add asset class
 # @gteodori: add portfolio_nb column and relative output 0, 1, ..., n
 # @gteodori: la cosa che dice Mat
-# @gteodori: controlla che portfolio_nb sia ben gestito
 # @gteodori: controlla che non calcoliamo gli ES sugli isin non in portafoglio
 # @gteodori: aggiungi messaggio di errore se arriva un isin non riconosciuto
-# portfolio = pd.DataFrame({'portfolio_nb': ['2', '1'],
+# portfolio = pd.DataFrame({'portfolio_nb': ['2', '1', '1'],
     
-#                           'isin':['FREN02742905', 'FRENX7284263'],
+#                           'isin':['FREN02742905', 'FRENX7284263', 'FREX00156221'],
 
-#                           'prod_curcy': ['EUR', 'EUR'],
+#                           'prod_curcy': ['EUR', 'EUR', 'EUR'],
 
-#                           'qty':[-1, 1],
+#                           'qty':[-100, 10, 30],
 
-#                           'trade_price':[0, 0]})
+#                           'trade_price':[0, 0, 0.02]})
 
 
 def create_full_portfolio(portfolio):
     many_accounts = portfolio['portfolio_nb'].count()
     if many_accounts > 1:
         copy_portfolio = portfolio.copy(deep=True)
-        copy_portfolio['portfolio_nb'] = 'total_portfolio'
+        copy_portfolio['portfolio_nb'] = 'combined_portfolio'
         portfolio = pd.concat([portfolio, copy_portfolio], ignore_index=True)
     return portfolio
 
@@ -713,6 +722,10 @@ def create_full_portfolio(portfolio):
 # enr_port = enrich_portfolio(portfolio, rf04)
 
 # mtm_details, mtm_total = mtm(enr_port, rf03)
+
+# port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
+# print(output)
+# json_output = output.to_json()
 
 def calculate(portfolio):
     portfolio = create_full_portfolio(portfolio)
