@@ -661,7 +661,7 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
 
 # Input Paths (for large file use local resoruces)
 
-path = r'C:\Users\GTeodori\margin-simulator\input_data'
+path = r'C:\margin-simulator\margin-simulator\input_data'
 
  
 
@@ -686,15 +686,15 @@ rf04 = read_arrow(path + '\\2024-11-20_RF04.arrow')
 # @gteodori: controlla che portfolio_nb sia ben gestito
 # @gteodori: controlla che non calcoliamo gli ES sugli isin non in portafoglio
 # @gteodori: aggiungi messaggio di errore se arriva un isin non riconosciuto
-portfolio = pd.DataFrame({'portfolio_nb': ['2', '1'],
+# portfolio = pd.DataFrame({'portfolio_nb': ['2', '1'],
     
-                          'isin':['FREN02742905', 'FRENX7284263'],
+#                           'isin':['FREN02742905', 'FRENX7284263'],
 
-                          'prod_curcy': ['EUR', 'EUR'],
+#                           'prod_curcy': ['EUR', 'EUR'],
 
-                          'qty':[-1, 1],
+#                           'qty':[-1, 1],
 
-                          'trade_price':[0, 0]})
+#                           'trade_price':[0, 0]})
 
 
 def create_full_portfolio(portfolio):
@@ -705,8 +705,7 @@ def create_full_portfolio(portfolio):
         portfolio = pd.concat([portfolio, copy_portfolio], ignore_index=True)
     return portfolio
 
-portfolio = create_full_portfolio(portfolio)
-net_portfolio = net_positions(portfolio)
+
 # print(portfolio)
  
 
@@ -714,16 +713,14 @@ net_portfolio = net_positions(portfolio)
 
 # mtm_details, mtm_total = mtm(enr_port, rf03)
 
-port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
-print(output)
-json_output = output.to_json()
+def calculate(portfolio):
+    portfolio = create_full_portfolio(portfolio)
+    net_portfolio = net_positions(portfolio)
+    port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
+    json_output = output.to_json()
+    return json_output
 
-
-"ES"
-"DECO"
-"whatif"
-"mtm"
-"initial_margin"
-"gross_pos_value"
-"margin_%"
+#port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
+#print(output)
+#json_output = output.to_json()
 
