@@ -646,7 +646,9 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
 
     output['initial_margin'] = np.maximum(0, output['mtm'] + output['whatif'])
 
-    output['gross_pos_value'] = enr_port['pos_value'].sum()
+    gross_pos_value = enr_port.groupby('portfolio_nb', as_index = False)['pos_value'].sum()
+    gross_pos_value = gross_pos_value.rename(columns={'pos_value': 'gross_pos_value'})
+    output = output.merge(gross_pos_value, on=['portfolio_nb'], how='left')
     
     output['margin_%'] = output['initial_margin'] / output['gross_pos_value']
     
@@ -674,7 +676,6 @@ rf02 = read_arrow(path + '\\2024-11-20_RF02.arrow')
 rf03 = read_arrow(path + '\\2024-11-20_RF03.arrow')
 
 rf04 = read_arrow(path + '\\2024-11-20_RF04.arrow')
-
  
 
 # dummy portfolio
