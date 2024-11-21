@@ -144,10 +144,7 @@ def read_arrow(path):
 
     return df
 
-
-def enrich_portfolio(portfolio, rf04):
-
-    """
+"""
 
     Enriches the portfolio DataFrame by merging it with reference data (rf04)
 
@@ -183,19 +180,56 @@ def enrich_portfolio(portfolio, rf04):
 
               abs(qty) * mult * price
 
-    """
+"""
+def enrich_portfolio(portfolio, rf04):
 
-    df = portfolio.merge(rf04, on='isin', how='left')
+    df = portfolio.merge(rf04, on=['isin', 'prod_curcy'], how='left')
 
     df['pos_value'] = abs(df['qty']) * df['mult'] * df['price']
 
     return df
 
+
+"""
+
+Nets the portfolio positions DataFrame by summing qtys on same [:portfolio_nb, :isin].
+
+
+    Parameters:
+
+        portfolio (pd.DataFrame): The portfolio data containing the following columns:
+
+            - 'portfolio_nb': Unique identifier for account
+
+            - 'isin': Unique identifier for securities.
+
+            - 'prod_curcy': instrument product prod_curcy
+
+            - 'qty': Quantity held in the portfolio (positive or negative).
+
+            - 'mult': Multiplier for the instrument (e.g., lot size or contract size).
+
+            - 'price': Current market price of the instrument.
+
+   
+
+    Returns:
+
+        pd.DataFrame: 
+
+"""
+def net_positions(portfolio):
+
+    def weighted_avg(values, weights):
+        return (values * weights).sum() / weights.sum()
+
+    return portfolio.groupby(['portfolio_nb', 'isin', 'prod_curcy']).agg(
+            qty = ('qty', 'sum'),
+            trade_price = ('trade_price', lambda x: weighted_avg(x, abs(portfolio.loc[x.index, 'qty'])))  # Custom function
+        ).reset_index()
  
 
-def mtm(enr_port, rf03):
-
-    """
+"""
 
     Calculates the mark-to-market (MTM) for a portfolio based on current exchange rates,
 
@@ -207,6 +241,8 @@ def mtm(enr_port, rf03):
 
         enr_port (pd.DataFrame): The enriched portfolio DataFrame containing:
 
+            - 'portfolio_nb': Unique identifier for account
+
             - 'prod_curcy': Product currency of the instrument.
 
             - 'asset_type': Type of the asset ('C' for cash, 'O' for options, etc.).
@@ -217,7 +253,7 @@ def mtm(enr_port, rf03):
 
             - 'mult': Multiplier for the instrument.
 
-            - 'ctv': Current value (used for cash instruments).
+            - 'trade_price': trade_price.
 
         rf03 (pd.DataFrame): Exchange rate data containing:
 
@@ -235,11 +271,13 @@ def mtm(enr_port, rf03):
 
             - pd.DataFrame: Filtered DataFrame of non-futures instruments with an additional column:
 
+                - 'portfolio_nb': Unique identifier for account
+
                 - 'mtm': Mark-to-market value for each row, calculated as:
 
                   - For cash-like instruments ('C'):
 
-                    qty * price - ctv
+                    qty * ( price - trade_price )
 
                   - For other non-futures instruments:
 
@@ -247,9 +285,8 @@ def mtm(enr_port, rf03):
 
             - float: Total MTM value (sum of all MTM values in the filtered DataFrame).
 
-    """
-
-   
+"""
+def mtm(enr_port, rf03):
 
     current_exc_rate = rf03[rf03['scenario'] == 'C']
 
@@ -259,7 +296,7 @@ def mtm(enr_port, rf03):
 
     df_opt_cash['mtm'] = np.where(df_opt_cash['asset_type'] == 'C',
 
-                                  df_opt_cash['qty'] * df_opt_cash['price'] - df_opt_cash['ctv'],
+                                  df_opt_cash['qty'] * ( df_opt_cash['price'] - df_opt_cash['trade_price'] ),
 
                                   df_opt_cash['qty'] * df_opt_cash['price'] * df_opt_cash['mult'])
 
@@ -267,9 +304,7 @@ def mtm(enr_port, rf03):
 
    
 
-def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
-
-    """
+"""
 
         Calculates the Expected Shortfall (ES) for a portfolio under both ordinary and stressed scenarios,
 
@@ -403,10 +438,8 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
 
    
 
-    """
-
-   
-
+"""
+def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
     
 
     enr_port = enrich_portfolio(portfolio, rf04)
@@ -601,7 +634,7 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
 
    
 
-    output['mtm'] = mtm_total
+    output['mtm'] = - mtm_total
 
     output['initial_margin'] = np.maximum(0, output['mtm'] + output['whatif'])
 
@@ -636,16 +669,22 @@ rf04 = read_arrow(path + '\\2024-11-20_RF04.arrow')
  
 
 # dummy portfolio
+# @gteodori: add asset class
+# @gteodori: add portfolio_nb column and relative output 0, 1, ..., n
+# @gteodori: la cosa che dice Mat
+# @gteodori: controlla che portfolio_nb sia ben gestito
+# @gteodori: controlla che non calcoliamo gli ES sugli isin non in portafoglio
+portfolio = pd.DataFrame({'portfolio_nb': ['1', '1'],
+    
+                          'isin':['FREN02742905', 'FRENX7284263'],
 
-portfolio = pd.DataFrame({'isin':['FREN02742905', 'FRENX7284263'],
-
-                          'pos_type':['S', 'S'],
+                          'prod_curcy': ['EUR', 'EUR'],
 
                           'qty':[-1, 1],
 
-                          'ctv':[0, 0]})
+                          'trade_price':[0, 0]})
 
- 
+net_portfolio = net_positions(portfolio)
 
  
 
@@ -653,9 +692,12 @@ portfolio = pd.DataFrame({'isin':['FREN02742905', 'FRENX7284263'],
 
 # mtm_details, mtm_total = mtm(enr_port, rf03)
 
-port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(portfolio, rf01, rf02, rf03, rf04)
+port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
 
+json_output = output.to_json()
+# print(json_output)
+# print(json_output)
 # print(port_scen_with_c)
 # print(pnl_s)
 # print(pnl_u)
-print(output)
+# print(json_output)
