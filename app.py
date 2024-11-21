@@ -4,6 +4,8 @@ import pandas as pd
 from src_margins.core import calculate
 from flasgger import Swagger
 from utilities import read_arrow
+import os
+import json
 
 app = Flask(__name__)
 swagger = Swagger(app)
@@ -48,16 +50,30 @@ def process_data():
     # Get the JSON payload from the incoming request
     data = request.get_json()
     df = convert_to_dataframe(data)
-    output = calculate(df)
+    output = calculate(df, data["dateTo"])
     # Show the DataFrame
-    print(output)
+    
     # Check if the data was provided
     if not data:
         return jsonify({"message": "No JSON payload provided"}), 400
 
     # Here, you can process the data (for now, just return it)
+    output = json.loads(output)
+    portfolios = []
+    for index in output["portfolio_nb"]:
+        portfolio = {
+            "portfolio_nb": output["portfolio_nb"][index],
+            "ES": output["ES"][index],
+            "DECO": output["DECO"][index],
+            "whatif": output["whatif"][index],
+            "mtm": output["mtm"][index],
+            "initial_margin": output["initial_margin"][index],
+            "gross_pos_value": output["gross_pos_value"][index],
+            "margin_%": output["margin_%"][index]
+        }
+        portfolios.append(portfolio)
     #return jsonify({"received_data": output})
-    return output
+    return portfolios
 
 def convert_to_dataframe(json_data):
     # Create empty lists to store data

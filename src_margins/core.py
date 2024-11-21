@@ -4,6 +4,7 @@ import pyarrow as pa
 
 import numpy as np
 
+import os
 
 """
 
@@ -672,13 +673,20 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
  
 
 # Input Paths (for large file use local resoruces)
-date = '2024-11-20'
 def read_rfs(date):
-    path = r'C:\margin-simulator\margin-simulator\input_data' + '\\' + date + '_'
-    rf01 = read_arrow(path + 'RF01.arrow')
-    rf02 = read_arrow(path + 'RF02.arrow')
-    rf03 = read_arrow(path + 'RF03.arrow')
-    rf04 = read_arrow(path + 'RF04.arrow')
+    base_path = r'C:\margin-simulator\margin-simulator\input_data'
+
+    rf01 = read_arrow(os.path.join(base_path, f"{date}_RF01.arrow"))
+    rf02 = read_arrow(os.path.join(base_path, f"{date}_RF02.arrow"))
+    rf03 = read_arrow(os.path.join(base_path, f"{date}_RF03.arrow"))
+    rf04 = read_arrow(os.path.join(base_path, f"{date}_RF04.arrow"))
+
+
+    # path = r'C:\margin-simulator\margin-simulator\input_data' + '\\' + date + '_'
+    # rf01 = read_arrow(path + 'RF01.arrow')
+    # rf02 = read_arrow(path + 'RF02.arrow')
+    # rf03 = read_arrow(path + 'RF03.arrow')
+    # rf04 = read_arrow(path + 'RF04.arrow')
     return rf01, rf02, rf03, rf04
 
  
@@ -724,10 +732,10 @@ def create_full_portfolio(portfolio):
 # print(output)
 # json_output = output.to_json()
 
-def calculate(portfolio, date):
+def calculate(portfolio, dateTo):
     portfolio = create_full_portfolio(portfolio)
     net_portfolio = net_positions(portfolio)
-    rf01, rf02, rf03, rf04 = read_rfs(date)
+    rf01, rf02, rf03, rf04 = read_rfs(dateTo)
     port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
     json_output = output.to_json()
     return json_output
