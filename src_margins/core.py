@@ -291,16 +291,15 @@ def mtm(enr_port, rf03):
     current_exc_rate = rf03[rf03['scenario'] == 'C']
 
     df = enr_port.merge(current_exc_rate, left_on='prod_curcy', right_on='base_curcy', how='left')
-
     df_opt_cash = df[df['asset_type'] != 'F']
-
     df_opt_cash['mtm'] = np.where(df_opt_cash['asset_type'] == 'C',
 
                                   df_opt_cash['qty'] * ( df_opt_cash['price'] - df_opt_cash['trade_price'] ),
 
                                   df_opt_cash['qty'] * df_opt_cash['price'] * df_opt_cash['mult'])
+    mtm_result = df_opt_cash.groupby('portfolio_nb', as_index = False)['mtm'].sum()
 
-    return df_opt_cash, df_opt_cash.mtm.sum()
+    return mtm_result
 
    
 
@@ -567,82 +566,92 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
  
 
     # Diversified ES
+    
+    ord_div_ES_pnl = pnl_s.groupby(['portfolio_nb', 'ref_dt'], as_index = False).agg(port_pnl=('P&L', 'sum'))
 
-    ord_div_ES_pnl = pnl_s.groupby('ref_dt').agg(port_pnl=('P&L', 'sum'))
+    stress_div_ES_pnl = pnl_u.groupby(['portfolio_nb', 'ref_dt'], as_index = False).agg(port_pnl=('P&L', 'sum'))
 
-    stress_div_ES_pnl = pnl_u.groupby('ref_dt').agg(port_pnl=('P&L', 'sum'))
+    def expected_shortfall(group, quantile):
+        # Calculate the quantile (VaR)
+        var = group.quantile(quantile)
+        
+        # Calculate the Expected Shortfall: average of values below the quantile
+        es = group[group <= var].mean()
+        
+        return es
+    def expected_shortfall_ord(group):
+        return expected_shortfall(group, quantile = ordinary_cl)
+    def expected_shortfall_str(group):
+        return expected_shortfall(group, quantile = stressed_cl)
 
- 
+    # Group by 'a' and apply the expected shortfall calculation on 'b'
+    ord_div_ES = ord_div_ES_pnl.groupby('portfolio_nb', as_index = False)['port_pnl'].apply(expected_shortfall_ord)
+    ord_div_ES = ord_div_ES.rename(columns={'port_pnl': 'ord_div_ES'})
 
-    ord_div_ES = ord_div_ES_pnl['port_pnl'].nsmallest(ord_observations).mean()
-
-    stress_div_ES = stress_div_ES_pnl['port_pnl'].nsmallest(stress_observations).mean()
+    str_div_ES = stress_div_ES_pnl.groupby('portfolio_nb', as_index = False)['port_pnl'].apply(expected_shortfall_str)
+    str_div_ES = str_div_ES.rename(columns={'port_pnl': 'str_div_ES'})
 
  
 
     # Undiversified ES
-
-    ord_und_ES_pnl = pnl_s.groupby(['ref_dt', 'und_isin']).agg(pnl=('P&L', 'sum')).reset_index()
-
-    ord_und_ES_pnl_app = ord_und_ES_pnl.groupby('und_isin').agg(undiv_pnl=('pnl', lambda x: x.nsmallest(ord_observations).mean()))
-
-    ord_und_ES = ord_und_ES_pnl_app['undiv_pnl'].sum()
-
+    
+    # ord_und_ES_pnl = pnl_s.groupby(['portfolio_nb', 'ref_dt', 'und_isin'], as_index = False).agg(pnl=('P&L', 'sum'))
+    # ord_und_ES_pnl_app = ord_und_ES_pnl.groupby(['portfolio_nb', 'und_isin'], as_index = False).agg(undiv_pnl=('pnl', lambda x: x.nsmallest(ord_observations).mean()))
+    # ord_und_ES = ord_und_ES_pnl_app.groupby('portfolio_nb', as_index = False)['undiv_pnl'].sum()
+    ord_undiv_ES = ord_div_ES.rename(columns={'ord_div_ES': 'ord_undiv_ES'}) # @gteodori: temp hack
  
 
-    stress_und_ES_pnl = pnl_u.groupby(['ref_dt', 'und_isin']).agg(pnl=('P&L', 'sum')).reset_index()
-
-    stress_und_ES_pnl_app = stress_und_ES_pnl.groupby('und_isin').agg(undiv_pnl=('pnl', lambda x: x.nsmallest(stress_observations).mean()))
-
-    stress_und_ES = stress_und_ES_pnl_app['undiv_pnl'].sum()
+    # stress_und_ES_pnl = pnl_u.groupby(['portfolio_nb', 'ref_dt', 'und_isin'], as_index = False).agg(pnl=('P&L', 'sum'))
+    # stress_und_ES_pnl_app = stress_und_ES_pnl.groupby(['portfolio_nb', 'und_isin'], as_index = False).agg(undiv_pnl=('pnl', lambda x: x.nsmallest(stress_observations).mean()))
+    # stress_und_ES = stress_und_ES_pnl_app.groupby('portfolio_nb', as_index = False)['undiv_pnl'].sum()
+    str_undiv_ES = str_div_ES.rename(columns={'str_div_ES': 'str_undiv_ES'}) # @gteodori: temp hack
 
  
 
     # Calcolo del deco addon
 
     deco = float(rf01['deco'].iloc[0]) if isinstance(rf01, pd.DataFrame) else rf01['deco']
-
-    ord_deco_addon = (1 - deco) * (ord_und_ES - ord_div_ES)
-
-    stress_deco_addon = (1 - deco) * (stress_und_ES - stress_div_ES)
+    ord_deco_addon = ord_undiv_ES.merge(ord_div_ES, on=['portfolio_nb'], how='left')
+    ord_deco_addon['ord_deco_addon'] = (1 - deco) * (ord_deco_addon.ord_undiv_ES - ord_deco_addon.ord_div_ES)
+    ord_deco_addon = ord_deco_addon[['portfolio_nb', 'ord_deco_addon']]
+    str_deco_addon = str_undiv_ES.merge(str_div_ES, on=['portfolio_nb'], how='left')
+    str_deco_addon['str_deco_addon'] = (1 - deco) * (str_deco_addon.str_undiv_ES - str_deco_addon.str_div_ES)
+    str_deco_addon = str_deco_addon[['portfolio_nb', 'str_deco_addon']]
 
    
 
-    output = pd.DataFrame({'ord_div_ES':[abs(ord_div_ES)],
-
-                           'str_div_ES':[abs(stress_div_ES)],
-
-                           'ord_undiv_ES':[abs(ord_und_ES)],
-
-                           'str_undiv_ES':[abs(stress_und_ES)],
-
-                           'ord_deco_addon':[abs(ord_deco_addon)],
-
-                           'str_deco_addon':[abs(stress_deco_addon)]})
+    output = ord_div_ES.merge(str_div_ES, on=['portfolio_nb'], how='left').merge(ord_undiv_ES, on=['portfolio_nb'], how='left').merge(str_undiv_ES, on=['portfolio_nb'], how='left').merge(ord_deco_addon, on=['portfolio_nb'], how='left').merge(str_deco_addon, on=['portfolio_nb'], how='left')
+    output['ord_div_ES'] = abs(output['ord_div_ES'])
+    output['str_div_ES'] = abs(output['str_div_ES'])
+    output['ord_undiv_ES'] = abs(output['ord_undiv_ES'])
+    output['str_undiv_ES'] = abs(output['str_undiv_ES'])
+    output['ord_deco_addon'] = abs(output['ord_deco_addon'])
+    output['str_deco_addon'] = abs(output['str_deco_addon'])
 
     ord_weight = float(rf01['ordinary_w'].iloc[0]) if isinstance(rf01, pd.DataFrame) else rf01['ordinary_w']
 
     str_weight = float(rf01['stressed_w'].iloc[0]) if isinstance(rf01, pd.DataFrame) else rf01['stressed_w']
 
-   
-
+    output['comb_is_bigger_than_plain'] = np.where(ord_weight*(output['ord_div_ES'] + output['ord_deco_addon']) + str_weight * (output['str_div_ES'] + output['str_deco_addon']) > (output['ord_div_ES']+output['ord_deco_addon']), True, False)
+    output['ES'] = np.where(output['comb_is_bigger_than_plain'], ord_weight*output['ord_div_ES'] + str_weight*output['str_div_ES'], output['ord_div_ES'])
+    output['DECO'] = np.where(output['comb_is_bigger_than_plain'], ord_weight*output['ord_deco_addon'] + str_weight*output['str_deco_addon'], output['ord_deco_addon'])
     output['whatif'] = np.absolute(np.maximum(ord_weight*(output['ord_div_ES'] + output['ord_deco_addon']) + str_weight * (output['str_div_ES'] + output['str_deco_addon']), (output['ord_div_ES']+output['ord_deco_addon'])))
 
- 
 
-    mtm_details, mtm_total = mtm(enr_port, rf03)
-
-   
-
-    output['mtm'] = - mtm_total
+    mtm_total = mtm(enr_port, rf03)
+    
+    output = output.merge(mtm_total, on=['portfolio_nb'], how='left')
+    output['mtm'] = output['mtm'].fillna(0.0)
+    output['mtm'] = - output['mtm']
 
     output['initial_margin'] = np.maximum(0, output['mtm'] + output['whatif'])
 
     output['gross_pos_value'] = enr_port['pos_value'].sum()
-
-    output['margin_%'] = float(output['initial_margin'] / output['gross_pos_value'])
-
- 
+    
+    output['margin_%'] = output['initial_margin'] / output['gross_pos_value']
+    
+    columns_order = ['portfolio_nb', 'ES', 'DECO', 'whatif', 'mtm', 'initial_margin', 'gross_pos_value', 'margin_%']
+    output = output[columns_order]
 
     return port_scen_with_c, pnl_s, pnl_u, output
 
@@ -669,12 +678,15 @@ rf04 = read_arrow(path + '\\2024-11-20_RF04.arrow')
  
 
 # dummy portfolio
+# @gteodori: fixa il deco addon
+# @gteodori: ottimizza
 # @gteodori: add asset class
 # @gteodori: add portfolio_nb column and relative output 0, 1, ..., n
 # @gteodori: la cosa che dice Mat
 # @gteodori: controlla che portfolio_nb sia ben gestito
 # @gteodori: controlla che non calcoliamo gli ES sugli isin non in portafoglio
-portfolio = pd.DataFrame({'portfolio_nb': ['1', '1'],
+# @gteodori: aggiungi messaggio di errore se arriva un isin non riconosciuto
+portfolio = pd.DataFrame({'portfolio_nb': ['2', '1'],
     
                           'isin':['FREN02742905', 'FRENX7284263'],
 
@@ -684,8 +696,18 @@ portfolio = pd.DataFrame({'portfolio_nb': ['1', '1'],
 
                           'trade_price':[0, 0]})
 
-net_portfolio = net_positions(portfolio)
 
+def create_full_portfolio(portfolio):
+    many_accounts = portfolio['portfolio_nb'].count()
+    if many_accounts > 1:
+        copy_portfolio = portfolio.copy(deep=True)
+        copy_portfolio['portfolio_nb'] = 'total_portfolio'
+        portfolio = pd.concat([portfolio, copy_portfolio], ignore_index=True)
+    return portfolio
+
+portfolio = create_full_portfolio(portfolio)
+net_portfolio = net_positions(portfolio)
+# print(portfolio)
  
 
 # enr_port = enrich_portfolio(portfolio, rf04)
@@ -693,11 +715,15 @@ net_portfolio = net_positions(portfolio)
 # mtm_details, mtm_total = mtm(enr_port, rf03)
 
 port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
-
+print(output)
 json_output = output.to_json()
-# print(json_output)
-# print(json_output)
-# print(port_scen_with_c)
-# print(pnl_s)
-# print(pnl_u)
-# print(json_output)
+
+
+"ES"
+"DECO"
+"whatif"
+"mtm"
+"initial_margin"
+"gross_pos_value"
+"margin_%"
+
