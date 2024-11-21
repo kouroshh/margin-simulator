@@ -60,28 +60,26 @@ def process_data():
     return output
 
 def convert_to_dataframe(json_data):
-    # Create empty lists to store the data
+    # Create empty lists to store data
     portfolio_nb = []
     isin = []
     prod_curcy = []
     qty = []
     trade_price = []
-    
-    # Iterate over portfolios in the JSON
-    for portfolio_id, portfolio_data in json_data.items():
-        # Extract the portfolio number (assuming it's like 'portfolio_nb_1' -> '1')
-        portfolio_num = portfolio_id.split('_')[2]
+
+    # Loop through portfolios in the JSON data
+    for portfolio in json_data['portfolios']:
+        portfolio_title = portfolio['title']  # Portfolio title
         
-        # Iterate over ISINs in each portfolio
-        for isin_id, isin_data in portfolio_data.items():
-            # Append the data to the respective lists
-            portfolio_nb.append(portfolio_num)
-            isin.append(isin_id)
-            prod_curcy.append(isin_data['prod_curcy'])
-            qty.append(isin_data['qty'])
-            trade_price.append(isin_data['trade_price'])
-    
-    # Create the DataFrame from the lists
+        # Loop through positions in each portfolio
+        for position in portfolio['positions']:
+            portfolio_nb.append(portfolio_title)
+            isin.append(position['isin'])
+            prod_curcy.append(position['currency'])
+            qty.append(int(position['quantity']))  # Convert quantity to int
+            trade_price.append(position['tradingPrice'])  # Trading price is directly added
+
+    # Convert the lists into a DataFrame
     df = pd.DataFrame({
         'portfolio_nb': portfolio_nb,
         'isin': isin,
