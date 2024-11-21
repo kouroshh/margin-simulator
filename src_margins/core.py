@@ -672,20 +672,17 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
  
 
 # Input Paths (for large file use local resoruces)
-
-path = r'C:\margin-simulator\margin-simulator\input_data'
+date = '2024-11-20'
+def read_rfs(date):
+    path = r'C:\margin-simulator\margin-simulator\input_data' + '\\' + date + '_'
+    rf01 = read_arrow(path + 'RF01.arrow')
+    rf02 = read_arrow(path + 'RF02.arrow')
+    rf03 = read_arrow(path + 'RF03.arrow')
+    rf04 = read_arrow(path + 'RF04.arrow')
+    return rf01, rf02, rf03, rf04
 
  
 
-# Load Data Files
-
-rf01 = read_arrow(path + '\\2024-11-20_RF01.arrow')
-
-rf02 = read_arrow(path + '\\2024-11-20_RF02.arrow')
-
-rf03 = read_arrow(path + '\\2024-11-20_RF03.arrow')
-
-rf04 = read_arrow(path + '\\2024-11-20_RF04.arrow')
  
 
 # dummy portfolio
@@ -727,9 +724,10 @@ def create_full_portfolio(portfolio):
 # print(output)
 # json_output = output.to_json()
 
-def calculate(portfolio):
+def calculate(portfolio, date):
     portfolio = create_full_portfolio(portfolio)
     net_portfolio = net_positions(portfolio)
+    rf01, rf02, rf03, rf04 = read_rfs(date)
     port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
     json_output = output.to_json()
     return json_output
