@@ -6,8 +6,10 @@ from flasgger import Swagger
 from utilities import convert_to_dataframe
 import os
 import json
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 swagger = Swagger(app)
 
 # Secret key to verify API key/token
@@ -56,7 +58,7 @@ def process_data():
             portfolioValue = {
                 "portfolioNumber": outputJson["portfolio_nb"][portofolio],
                 "ExpectedShortFall": outputJson["ES"][portofolio],
-                "DecoRelation": outputJson["DECO"][portofolio],
+                "DecorRelation": outputJson["DECO"][portofolio],
                 "whatIf": outputJson["whatif"][portofolio],
                 "markToMarket": outputJson["mtm"][portofolio],
                 "initialMargin": outputJson["initial_margin"][portofolio],
