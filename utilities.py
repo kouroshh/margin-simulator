@@ -22,7 +22,7 @@ def convert_to_dataframe(json_data):
             isin.append(position['isin'])
             prod_curcy.append(position['currency'])
             qty.append(int(position['quantity']))  # Convert quantity to int
-            trade_price.append(position['tradingPrice'])  # Trading price is directly added
+            trade_price.append(int(position['tradingPrice']))  # Trading price is directly added
 
     # Convert the lists into a DataFrame
     df = pd.DataFrame({
