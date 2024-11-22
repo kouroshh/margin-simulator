@@ -3,11 +3,13 @@ import functools
 import pandas as pd
 from src_margins.core import calculate
 from flasgger import Swagger
-from utilities import read_arrow
+from utilities import convert_to_dataframe
 import os
 import json
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 swagger = Swagger(app)
 
 # Secret key to verify API key/token
@@ -24,18 +26,8 @@ def api_key_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-@app.route('/token', methods=['GET'])
-def get_token():
-    # For simplicity, just return the API key as a "token"
-    return jsonify({"token": SECRET_API_KEY})
-
-@app.route('/protected', methods=['GET'])
-@api_key_required  # Protect this route with API key
-def protected():
-    return jsonify({"message": "Hello, you are authorized!"})
-
 @app.route('/calculate_margin', methods=['POST'])
-@api_key_required  # Protect this route with API key
+@api_key_required
 def process_data():
     """
     A Method to calculate the margin
@@ -48,63 +40,34 @@ def process_data():
             example: {"message": "Hello, World!"}
     """
     # Get the JSON payload from the incoming request
-    data = request.get_json()
-    df = convert_to_dataframe(data)
-    output = calculate(df, data["dateTo"])
-    # Show the DataFrame
-    
+    inputData = request.get_json()
     # Check if the data was provided
-    if not data:
+    if not inputData:
         return jsonify({"message": "No JSON payload provided"}), 400
 
-    # Here, you can process the data (for now, just return it)
-    output = json.loads(output)
-    portfolios = []
-    for index in output["portfolio_nb"]:
-        portfolio = {
-            "portfolio_nb": output["portfolio_nb"][index],
-            "ES": output["ES"][index],
-            "DECO": output["DECO"][index],
-            "whatif": output["whatif"][index],
-            "mtm": output["mtm"][index],
-            "initial_margin": output["initial_margin"][index],
-            "gross_pos_value": output["gross_pos_value"][index],
-            "margin_%": output["margin_%"][index]
-        }
-        portfolios.append(portfolio)
-    #return jsonify({"received_data": output})
-    return portfolios
-
-def convert_to_dataframe(json_data):
-    # Create empty lists to store data
-    portfolio_nb = []
-    isin = []
-    prod_curcy = []
-    qty = []
-    trade_price = []
-
-    # Loop through portfolios in the JSON data
-    for portfolio in json_data['portfolios']:
-        portfolio_title = portfolio['title']  # Portfolio title
-        
-        # Loop through positions in each portfolio
-        for position in portfolio['positions']:
-            portfolio_nb.append(portfolio_title)
-            isin.append(position['isin'])
-            prod_curcy.append(position['currency'])
-            qty.append(int(position['quantity']))  # Convert quantity to int
-            trade_price.append(position['tradingPrice'])  # Trading price is directly added
-
-    # Convert the lists into a DataFrame
-    df = pd.DataFrame({
-        'portfolio_nb': portfolio_nb,
-        'isin': isin,
-        'prod_curcy': prod_curcy,
-        'qty': qty,
-        'trade_price': trade_price
-    })
+    df = convert_to_dataframe(inputData)
+    output = calculate(df, inputData["dateFrom"], inputData["dateTo"])
+    # output = json.loads(output)
     
-    return df
+    portfoliosDates = {}
+    
+    for date in output:
+        portfolios = []    
+        outputJson = json.loads(output[date])
+        for portofolio in outputJson["portfolio_nb"]:
+            portfolioValue = {
+                "portfolioNumber": outputJson["portfolio_nb"][portofolio],
+                "ExpectedShortFall": round(outputJson["ES"][portofolio], 1),
+                "DecoRelation": round(outputJson["DECO"][portofolio], 1),
+                "whatIf":  round(outputJson["whatif"][portofolio], 1),
+                "markToMarket":  round(outputJson["mtm"][portofolio], 1),
+                "initialMargin":  round(outputJson["initial_margin"][portofolio], 1),
+                "grossPositionValue":  round(outputJson["gross_pos_value"][portofolio], 1),
+                "marginPercentage":  round(outputJson["margin_%"][portofolio], 1)
+            }
+            portfolios.append(portfolioValue)
+        portfoliosDates[date] = portfolios
+    return portfoliosDates
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -4,6 +4,38 @@ import pandas as pd
 
 app = Flask(__name__)
 
+def convert_to_dataframe(json_data):
+    # Create empty lists to store data
+    portfolio_nb = []
+    isin = []
+    prod_curcy = []
+    qty = []
+    trade_price = []
+
+    # Loop through portfolios in the JSON data
+    for portfolio in json_data['portfolios']:
+        portfolio_title = portfolio['title']  # Portfolio title
+        
+        # Loop through positions in each portfolio
+        for position in portfolio['positions']:
+            portfolio_nb.append(portfolio_title)
+            isin.append(position['isin'])
+            prod_curcy.append(position['currency'])
+            qty.append(int(position['quantity']))  # Convert quantity to int
+            trade_price.append(int(position['tradingPrice']))  # Trading price is directly added
+
+    # Convert the lists into a DataFrame
+    df = pd.DataFrame({
+        'portfolio_nb': portfolio_nb,
+        'isin': isin,
+        'prod_curcy': prod_curcy,
+        'qty': qty,
+        'trade_price': trade_price
+    })
+    
+    return df
+
+
 def read_arrow(path):      
     with open(path, 'rb') as f:
         try:
@@ -44,7 +76,6 @@ def read_arrow(path):
     df = new_table.to_pandas()
 
     return df
-
 
 if __name__ == '__main__':
     
