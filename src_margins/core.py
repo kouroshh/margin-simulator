@@ -4,6 +4,7 @@ import pyarrow as pa
 
 import numpy as np
 
+# from datetime import datetime
 
 """
 
@@ -597,13 +598,16 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
     count_a = pnl_s['und_isin'].unique()
     count = pnl_s.groupby('portfolio_nb', as_index = False)['und_isin'].nunique()
     
+    # start = datetime.now()
     # ord_und_ES_pnl = pnl_s.groupby(['portfolio_nb', 'ref_dt', 'und_isin'], as_index = False).agg(pnl=('P&L', 'sum'))
     # ord_und_ES_pnl_app = ord_und_ES_pnl.groupby(['portfolio_nb', 'und_isin'], as_index = False).agg(undiv_pnl=('pnl', lambda x: x.nsmallest(ord_observations).mean()))
     # ord_und_ES = ord_und_ES_pnl_app.groupby('portfolio_nb', as_index = False)['undiv_pnl'].sum()
+    # end = datetime.now()
+    # seconds = (end - start).seconds
+    # print('elapsed ' + seconds + 'seconds')
     ord_undiv_ES = ord_div_ES.rename(columns={'ord_div_ES': 'ord_undiv_ES'}) # @gteodori: temp hack
     ord_undiv_ES = ord_undiv_ES.merge(count, on=['portfolio_nb'], how='left')
     ord_undiv_ES['ord_undiv_ES'] = ord_undiv_ES['ord_undiv_ES'] * (1.0 + 0.078 * np.sqrt(ord_undiv_ES['und_isin'] - 1))
-    print(ord_undiv_ES)
     ord_undiv_ES = ord_undiv_ES[['portfolio_nb', 'ord_undiv_ES']]
  
 
@@ -672,7 +676,7 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
  
 
 # Input Paths (for large file use local resoruces)
-date = '2024-11-20'
+dates = ['2024-11-19', '2024-11-20']
 def read_rfs(date):
     path = r'C:\margin-simulator\margin-simulator\input_data' + '\\' + date + '_'
     rf01 = read_arrow(path + 'RF01.arrow')
@@ -689,9 +693,7 @@ def read_rfs(date):
 # @gteodori: fixa il deco addon
 # @gteodori: ottimizza
 # @gteodori: add asset class
-# @gteodori: add portfolio_nb column and relative output 0, 1, ..., n
 # @gteodori: la cosa che dice Mat
-# @gteodori: controlla che non calcoliamo gli ES sugli isin non in portafoglio
 # @gteodori: aggiungi messaggio di errore se arriva un isin non riconosciuto
 # portfolio = pd.DataFrame({'portfolio_nb': ['2', '1', '1'],
     
@@ -724,13 +726,20 @@ def create_full_portfolio(portfolio):
 # print(output)
 # json_output = output.to_json()
 
-def calculate(portfolio, date):
+def calculate(portfolio, start_dt, end_dt):
     portfolio = create_full_portfolio(portfolio)
     net_portfolio = net_positions(portfolio)
-    rf01, rf02, rf03, rf04 = read_rfs(date)
-    port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
-    json_output = output.to_json()
-    return json_output
+    dates = pd.date_range(start=start_dt, end=end_dt).strftime('%Y-%m-%d').tolist()
+    outputs_by_date = {}
+    for date in dates:
+        rf01, rf02, rf03, rf04 = read_rfs(date)
+        port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
+        json_output = output.to_json()
+        outputs_by_date[date] = json_output
+    return outputs_by_date
+
+# outputs_by_date = calculate(portfolio, '2024-11-18', '2024-11-20')
+# print(outputs_by_date)
 
 #port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
 #print(output)
