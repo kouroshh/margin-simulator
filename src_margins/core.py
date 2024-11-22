@@ -5,6 +5,7 @@ import pyarrow as pa
 import numpy as np
 
 # from datetime import datetime
+import os
 
 """
 
@@ -678,11 +679,19 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
 # Input Paths (for large file use local resoruces)
 dates = ['2024-11-19', '2024-11-20']
 def read_rfs(date):
-    path = r'C:\margin-simulator\margin-simulator\input_data' + '\\' + date + '_'
-    rf01 = read_arrow(path + 'RF01.arrow')
-    rf02 = read_arrow(path + 'RF02.arrow')
-    rf03 = read_arrow(path + 'RF03.arrow')
-    rf04 = read_arrow(path + 'RF04.arrow')
+    base_path = r'C:\margin-simulator\margin-simulator\input_data'
+
+    rf01 = read_arrow(os.path.join(base_path, f"{date}_RF01.arrow"))
+    rf02 = read_arrow(os.path.join(base_path, f"{date}_RF02.arrow"))
+    rf03 = read_arrow(os.path.join(base_path, f"{date}_RF03.arrow"))
+    rf04 = read_arrow(os.path.join(base_path, f"{date}_RF04.arrow"))
+
+
+    # path = r'C:\margin-simulator\margin-simulator\input_data' + '\\' + date + '_'
+    # rf01 = read_arrow(path + 'RF01.arrow')
+    # rf02 = read_arrow(path + 'RF02.arrow')
+    # rf03 = read_arrow(path + 'RF03.arrow')
+    # rf04 = read_arrow(path + 'RF04.arrow')
     return rf01, rf02, rf03, rf04
 
  
