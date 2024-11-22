@@ -55,13 +55,13 @@ def process_data():
         for portofolio in outputJson["portfolio_nb"]:
             portfolioValue = {
                 "portfolioNumber": outputJson["portfolio_nb"][portofolio],
-                "ExpectedShortFall": outputJson["ES"][portofolio],
-                "DecoRelation": outputJson["DECO"][portofolio],
-                "whatIf": outputJson["whatif"][portofolio],
-                "markToMarket": outputJson["mtm"][portofolio],
-                "initialMargin": outputJson["initial_margin"][portofolio],
-                "grossPositionValue": outputJson["gross_pos_value"][portofolio],
-                "marginPercentage": outputJson["margin_%"][portofolio]
+                "ExpectedShortFall": round(outputJson["ES"][portofolio], 1),
+                "DecoRelation": round(outputJson["DECO"][portofolio], 1),
+                "whatIf":  round(outputJson["whatif"][portofolio], 1),
+                "markToMarket":  round(outputJson["mtm"][portofolio], 1),
+                "initialMargin":  round(outputJson["initial_margin"][portofolio], 1),
+                "grossPositionValue":  round(outputJson["gross_pos_value"][portofolio], 1),
+                "marginPercentage":  round(outputJson["margin_%"][portofolio], 1)
             }
             portfolios.append(portfolioValue)
         portfoliosDates[date] = portfolios
