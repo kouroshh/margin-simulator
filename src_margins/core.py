@@ -669,8 +669,28 @@ def expected_shortfall(portfolio, rf01, rf02, rf03, rf04):
     
     columns_order = ['portfolio_nb', 'ES', 'DECO', 'whatif', 'mtm', 'initial_margin', 'gross_pos_value', 'margin_%']
     output = output[columns_order]
+    
+    worst_isin_per_account = {}
+    for account in pnl_s['portfolio_nb'].unique():
+        df = pnl_s[pnl_s['portfolio_nb'] == account]
+        pivot_table = pd.pivot_table(df, values='P&L', index='ref_dt', columns='isin', aggfunc='sum', fill_value=0)
+        pivot_table['portfolio_pnl'] = pivot_table.sum(axis=1)
+        pivot_table['rank'] = pivot_table['portfolio_pnl'].rank(ascending=True)
+        subset_pivot_table = pivot_table[pivot_table['rank'] <= ord_observations]
+        worst_isin = []
+        n = min(5, subset_pivot_table.shape[1] - 2)
+        exclude_columns = ['portfolio_pnl', 'rank']
+        for row_index in range(subset_pivot_table.shape[0]):
+            # aggiungi data
+            smallest_columns = subset_pivot_table.iloc[row_index].drop(exclude_columns).nsmallest(n).index.tolist()
+            isin_weight = []
+            for isin in smallest_columns:
+                w = np.abs(subset_pivot_table[isin].iloc[row_index] / subset_pivot_table['portfolio_pnl'].iloc[row_index]) if subset_pivot_table[isin].iloc[row_index] < 0.0 else 0.0
+                isin_weight.append(w)
+            worst_isin.append(pd.DataFrame({'isin': smallest_columns, 'weight': isin_weight}))
+        worst_isin_per_account[account] = worst_isin
 
-    return port_scen_with_c, pnl_s, pnl_u, output
+    return port_scen_with_c, pnl_s, pnl_u, output, worst_isin_per_account
 
  
 
@@ -742,7 +762,7 @@ def calculate(portfolio, start_dt, end_dt):
     outputs_by_date = {}
     for date in dates:
         rf01, rf02, rf03, rf04 = read_rfs(date)
-        port_scen_with_c, pnl_s, pnl_u, output = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
+        port_scen_with_c, pnl_s, pnl_u, output, worst_isin_per_account = expected_shortfall(net_portfolio, rf01, rf02, rf03, rf04)
         json_output = output.to_json()
         outputs_by_date[date] = json_output
     return outputs_by_date
